@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contas do Mês — Controle de dívidas e compromissos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{display:['Sora','sans-serif'],sans:['Inter','sans-serif']}}}};</script>
+<style>
+:root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--txt:#0f172a;--muted:#64748b;--accent:#10b981;--accent2:#059669;--warn:#f59e0b;--late:#ef4444;--shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px -12px rgba(15,23,42,.18)}
+html.dark{--bg:#0a0a14;--card:#141428;--line:#26264a;--txt:#f1f5f9;--muted:#94a3b8;--accent:#ec4899;--accent2:#a855f7;--warn:#fbbf24;--late:#fb7185;--shadow:0 0 0 1px rgba(168,85,247,.10),0 18px 40px -20px rgba(236,72,153,.35)}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.card{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:18px}
+.muted{color:var(--muted)}.accent{color:var(--accent)}
+.btn{transition:transform .15s,box-shadow .2s,background .2s,opacity .2s}
+.btn:hover{transform:translateY(-1px)}.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+html.dark .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.btn-primary:hover{box-shadow:0 8px 22px -8px var(--accent)}
+.row{transition:opacity .28s,transform .28s,background .2s}
+.row:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.row.leaving{opacity:0;transform:translateX(18px) scale(.98)}
+.blurred{filter:blur(7px);user-select:none}
+.chip{border:1px solid var(--line);transition:all .15s}
+.chip[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+input,select{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:.55rem .7rem;width:100%;outline:none;transition:border .2s,box-shadow .2s}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+option{color:#0f172a}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sheet{transition:opacity .2s}.sheet .panel{transition:transform .25s cubic-bezier(.2,.8,.25,1),opacity .25s}
+.sheet.hidden .panel{transform:translateY(16px);opacity:0}
+.tabbtn[aria-selected="true"]{background:var(--accent);color:#fff}
+.navbtn[aria-current="true"]{color:var(--accent)}
+.bar{background:var(--line);border-radius:99px;overflow:hidden;height:8px}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .4s}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="mx-auto max-w-6xl px-4 pb-28 md:pb-10 pt-4">
+
+<header class="flex items-center justify-between gap-3 mb-4">
+  <div class="flex items-center gap-3">
+    <div class="h-10 w-10 rounded-2xl grid place-items-center text-white font-display font-bold" style="background:var(--accent)">C</div>
+    <div><h1 class="font-display text-lg md:text-xl font-bold leading-tight">Contas do mês</h1>
+    <p class="text-xs muted">Dívidas e compromissos da casa</p></div>
+  </div>
+  <div class="flex items-center gap-2">
+    <button id="backupBtn" class="btn card px-3 py-2 text-sm" title="Backup dos dados">💾</button>
+    <button id="privacyBtn" class="btn card px-3 py-2 text-sm" aria-pressed="false" title="Ocultar valores"><span id="eyeIcon">👁️</span></button>
+    <button id="themeBtn" class="btn card px-3 py-2 text-sm" title="Alternar tema">🌙</button>
+    <button id="newBtn" class="btn btn-primary px-4 py-2 rounded-xl text-sm font-semibold hidden md:inline-flex">+ Nova conta</button>
+  </div>
+</header>
+
+<div id="lateBanner" class="hidden card p-3 mb-4 flex items-center gap-3" style="border-color:var(--late)">
+  <span class="text-xl">⚠️</span>
+  <p class="text-sm flex-1" id="lateText"></p>
+  <button id="goLate" class="btn btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">Revisar</button>
+</div>
+
+<div class="card p-2 flex items-center justify-between mb-4">
+  <button id="prevMonth" class="btn px-3 py-2 rounded-xl text-lg" aria-label="Mês anterior">‹</button>
+  <div class="text-center"><div id="monthLabel" class="font-display font-semibold capitalize">—</div>
+  <button id="todayBtn" class="text-xs muted hover:underline">ir para o mês atual</button></div>
+  <button id="nextMonth" class="btn px-3 py-2 rounded-xl text-lg" aria-label="Próximo mês">›</button>
+</div>
+
+<section class="grid gap-4 md:grid-cols-3 mb-4">
+  <div class="card p-4"><p class="text-xs muted">A pagar</p>
+    <p class="font-display text-2xl font-bold mt-1 money" id="sumPending">R$ 0,00</p>
+    <p class="text-xs muted mt-1" id="cntPending">0 contas pendentes</p></div>
+  <div class="card p-4"><p class="text-xs muted">Pago</p>
+    <p class="font-display text-2xl font-bold mt-1 money accent" id="sumPaid">R$ 0,00</p>
+    <p class="text-xs muted mt-1" id="cntPaid">0 contas quitadas</p></div>
+  <div class="card p-4"><p class="text-xs muted">Total do mês</p>
+    <p class="font-display text-2xl font-bold mt-1 money" id="sumTotal">R$ 0,00</p>
+    <p class="text-xs muted mt-1" id="pctLabel">0% quitado</p></div>
+</section>
+
+<div class="grid gap-4 md:grid-cols-[320px,1fr] items-start">
+  <div class="grid gap-4">
+    <div class="card p-4">
+      <h2 class="font-display font-semibold mb-2">Progresso do mês</h2>
+      <div class="relative h-48"><canvas id="chart"></canvas></div>
+      <div class="flex justify-center gap-4 mt-3 text-xs muted">
+        <span class="flex items-center gap-1"><i class="h-2 w-2 rounded-full inline-block" style="background:var(--accent)"></i>Pago</span>
+        <span class="flex items-center gap-1"><i class="h-2 w-2 rounded-full inline-block" style="background:#94a3b8"></i>Pendente</span></div>
+    </div>
+    <div class="card p-4">
+      <h2 class="font-display font-semibold mb-3">Quem deve o quê</h2>
+      <div id="byResp" class="grid gap-3 text-sm"></div>
+    </div>
+    <div class="card p-4">
+      <h2 class="font-display font-semibold">Já comprometido à frente</h2>
+      <p class="text-xs muted mb-3">Fixas, cartões e parcelas que caem nos próximos meses.</p>
+      <div id="forecast" class="grid gap-2.5 text-sm"></div>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <div class="flex gap-2 mb-3">
+      <button class="tabbtn btn px-4 py-2 rounded-xl text-sm font-semibold card" data-tab="pending" aria-selected="true">Pendentes</button>
+      <button class="tabbtn btn px-4 py-2 rounded-xl text-sm font-semibold card" data-tab="paid" aria-selected="false">Pagas</button>
+    </div>
+    <div class="grid gap-2 sm:grid-cols-[1fr,auto,auto,auto] mb-3">
+      <input id="q" placeholder="Buscar conta...">
+      <select id="fType"><option value="">Todo tipo</option><option value="fixa">Fixa</option><option value="cartao">Cartão</option><option value="parcelada">Parcelada</option><option value="variavel">Variável</option></select>
+      <select id="fResp"><option value="">Todos</option><option>Bruno</option><option>Fernanda</option><option>Ambos</option></select>
+      <select id="sortBy"><option value="due">Por vencimento</option><option value="amount">Maior valor</option><option value="desc">Por nome</option></select>
+    </div>
+    <ul id="list" class="divide-y" style="border-color:var(--line)"></ul>
+    <p id="empty" class="text-center muted text-sm py-10 hidden"></p>
+  </div>
+</div>
+</div>
+
+<nav class="md:hidden fixed bottom-0 inset-x-0 z-30 border-t backdrop-blur" style="background:color-mix(in srgb,var(--card) 90%,transparent);border-color:var(--line);padding-bottom:env(safe-area-inset-bottom,0px)">
+  <div class="grid grid-cols-3 items-center">
+    <button class="navbtn btn py-3 text-xs flex flex-col items-center gap-1" data-tab="pending" aria-current="true"><span>📋</span>Pendentes</button>
+    <button id="newBtnMobile" class="btn btn-primary mx-auto -mt-6 h-14 w-14 rounded-full text-2xl font-bold grid place-items-center shadow-lg">+</button>
+    <button class="navbtn btn py-3 text-xs flex flex-col items-center gap-1" data-tab="paid"><span>✅</span>Pagas</button>
+  </div>
+</nav>
+
+<div id="sheet" class="sheet hidden fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6 bg-black/50">
+  <div class="panel card w-full md:max-w-lg max-h-[92dvh] overflow-y-auto p-5 rounded-b-none md:rounded-b-[18px]">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="sheetTitle" class="font-display text-lg font-bold">Nova conta</h3>
+      <button id="closeSheet" class="btn px-3 py-1 rounded-lg text-xl" aria-label="Fechar">×</button>
+    </div>
+    <form id="form" class="grid gap-4">
+      <div><label class="text-xs muted">Descrição</label><input id="f-desc" required placeholder="Fatura Nubank, Luz, IPTU..."></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs muted" id="amountLabel">Valor (R$)</label><input id="f-amount" type="number" step="0.01" min="0" placeholder="0,00"></div>
+        <div><label class="text-xs muted">Dia de vencimento</label><input id="f-due" type="number" min="1" max="31" value="10" required></div>
+      </div>
+      <p id="amountHint" class="text-xs muted -mt-2 hidden">Deixe em branco se a fatura muda todo mês — você lança o valor depois, direto na lista.</p>
+      <div><label class="text-xs muted">Tipo de conta</label>
+        <div id="f-type" class="grid grid-cols-4 gap-2 mt-1">
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="fixa" aria-pressed="true">Fixa</button>
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="cartao">Cartão</button>
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="parcelada">Parcelada</button>
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="variavel">Variável</button>
+        </div>
+        <p id="typeHint" class="text-xs muted mt-2"></p>
+      </div>
+      <div id="instWrap" class="grid grid-cols-2 gap-3 hidden">
+        <div><label class="text-xs muted">Nº de parcelas</label><input id="f-inst" type="number" min="2" max="360" value="12"></div>
+        <div><label class="text-xs muted">Mês inicial</label><input id="f-start" type="month"></div>
+      </div>
+      <div id="endWrap"><label class="text-xs muted">Repetir até (opcional)</label><input id="f-end" type="month">
+        <p class="text-xs muted mt-1">Em branco, repete sem prazo. Preencha ao cancelar o serviço.</p></div>
+      <div><label class="text-xs muted">Responsável</label>
+        <div id="f-resp" class="grid grid-cols-3 gap-2 mt-1">
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="Bruno" aria-pressed="true">Bruno</button>
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="Fernanda">Fernanda</button>
+          <button type="button" class="chip btn py-2 rounded-xl text-xs font-semibold" data-v="Ambos">Ambos</button>
+        </div>
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button type="submit" class="btn btn-primary flex-1 py-3 rounded-xl font-semibold">Salvar conta</button>
+        <button type="button" id="cancelBtn" class="btn card px-4 rounded-xl">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="backupSheet" class="sheet hidden fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6 bg-black/50">
+  <div class="panel card w-full md:max-w-md p-5 rounded-b-none md:rounded-b-[18px]">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-display text-lg font-bold">Backup dos dados</h3>
+      <button id="closeBackup" class="btn px-3 py-1 rounded-lg text-xl" aria-label="Fechar">×</button>
+    </div>
+    <p class="text-sm muted mb-4">Tudo fica salvo só neste navegador. Limpar os dados do navegador apaga as contas, então exporte de vez em quando.</p>
+    <div class="grid gap-2">
+      <button id="exportBtn" class="btn btn-primary py-3 rounded-xl font-semibold">Exportar arquivo JSON</button>
+      <label class="btn card py-3 rounded-xl font-semibold text-center cursor-pointer">Importar arquivo JSON<input id="importFile" type="file" accept="application/json" class="hidden"></label>
+    </div>
+    <p id="lastBackup" class="text-xs muted mt-3 text-center"></p>
+  </div>
+</div>
+
+<script>
+const KEY='contasDoMes.v2';
+const BRL=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const TYPES={fixa:{l:'Fixa',c:'#0ea5e9',h:'Repete todo mês com o mesmo valor. Água, internet, aluguel.'},
+cartao:{l:'Cartão',c:'#f59e0b',h:'Repete todo mês, mas o valor você lança quando a fatura fecha.'},
+parcelada:{l:'Parcelada',c:'#8b5cf6',h:'Ocupa um número definido de meses e some sozinha ao terminar.'},
+variavel:{l:'Variável',c:'#f43f5e',h:'Aparece só neste mês. Gasto avulso, conserto, imprevisto.'}};
+const RESP={Bruno:'#10b981',Fernanda:'#ec4899',Ambos:'#6366f1'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let state={bills:[],privacy:false,theme:'light',lastBackup:null};
+let cursor=new Date();cursor.setDate(1);
+let tab='pending',editingId=null,chart=null;
+
+function load(){try{const r=localStorage.getItem(KEY);if(r)state={...state,...JSON.parse(r)};}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+const mk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+const diff=(a,b)=>{const[ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);return(by-ay)*12+(bm-am);};
+const addM=(k,n)=>{const[y,m]=k.split('-').map(Number);const d=new Date(y,m-1+n,1);return mk(d);};
+const labelOf=k=>{const[y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});};
+const shortOf=k=>{const[y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short'}).replace('.','');};
+
+function occurrence(b,key){
+  const d=diff(b.start,key);
+  if(b.type==='parcelada')return d>=0&&d<b.installments?{n:d+1,of:b.installments}:null;
+  if(b.type==='variavel')return d===0?{}:null;
+  if(d<0)return null;
+  if(b.end&&diff(key,b.end)<0)return null;
+  return{};
+}
+const valueOf=(b,key)=>{const v=(b.values||{})[key];return typeof v==='number'?v:(b.amount||0);};
+const needsValue=(b,key)=>valueOf(b,key)<=0;
+const isPaid=(b,key)=>(b.paid||[]).includes(key);
+const billsOf=key=>state.bills.filter(b=>occurrence(b,key));
+const totalOf=key=>billsOf(key).reduce((s,b)=>s+valueOf(b,key),0);
+const pendingOf=key=>billsOf(key).filter(b=>!isPaid(b,key));
+
+function status(b,key){
+  const now=new Date(),cur=mk(now);
+  if(diff(key,cur)>0)return{k:'late',t:'atrasada'};
+  if(key!==cur)return{k:'ok',t:''};
+  const left=b.due-now.getDate();
+  if(left<0)return{k:'late',t:'venceu dia '+b.due};
+  if(left===0)return{k:'warn',t:'vence hoje'};
+  if(left<=3)return{k:'warn',t:`vence em ${left} ${left===1?'dia':'dias'}`};
+  return{k:'ok',t:''};
+}
+
+function render(){
+  const key=mk(cursor);
+  $('#monthLabel').textContent=labelOf(key);
+  const items=billsOf(key);
+  const paid=items.filter(b=>isPaid(b,key)),pend=items.filter(b=>!isPaid(b,key));
+  const sp=pend.reduce((s,b)=>s+valueOf(b,key),0),sd=paid.reduce((s,b)=>s+valueOf(b,key),0),tot=sp+sd;
+  $('#sumPending').textContent=BRL(sp);$('#sumPaid').textContent=BRL(sd);$('#sumTotal').textContent=BRL(tot);
+  $('#cntPending').textContent=`${pend.length} ${pend.length===1?'conta pendente':'contas pendentes'}`;
+  $('#cntPaid').textContent=`${paid.length} ${paid.length===1?'conta quitada':'contas quitadas'}`;
+  $('#pctLabel').textContent=`${tot?Math.round(sd/tot*100):0}% quitado`;
+
+  // atrasos de meses anteriores
+  const cur=mk(new Date());let lateSum=0,lateCount=0,lateKey=null;
+  for(let i=1;i<=12;i++){const k=addM(cur,-i);const p=pendingOf(k);
+    if(p.length){lateCount+=p.length;lateSum+=p.reduce((s,b)=>s+valueOf(b,k),0);if(!lateKey)lateKey=k;}}
+  $('#lateBanner').classList.toggle('hidden',!lateCount);
+  if(lateCount){$('#lateText').innerHTML=`<strong>${lateCount} ${lateCount===1?'conta ficou':'contas ficaram'} em aberto</strong> em meses anteriores, somando <span class="money">${BRL(lateSum)}</span>.`;
+    $('#goLate').onclick=()=>{const[y,m]=lateKey.split('-').map(Number);cursor=new Date(y,m-1,1);tab='pending';render();};}
+
+  // por responsável
+  const br=$('#byResp');br.innerHTML='';
+  Object.keys(RESP).forEach(r=>{
+    const mine=items.filter(b=>b.resp===r);
+    if(!mine.length)return;
+    const p=mine.filter(b=>!isPaid(b,key)).reduce((s,b)=>s+valueOf(b,key),0);
+    const t=mine.reduce((s,b)=>s+valueOf(b,key),0);
+    const el=document.createElement('div');
+    el.innerHTML=`<div class="flex justify-between items-baseline mb-1">
+      <span class="font-semibold flex items-center gap-1.5"><i class="h-2 w-2 rounded-full inline-block" style="background:${RESP[r]}"></i>${r}</span>
+      <span class="money text-xs muted">${BRL(p)} de ${BRL(t)}</span></div>
+      <div class="bar"><i style="width:${t?((t-p)/t*100):0}%;background:${RESP[r]}"></i></div>`;
+    br.appendChild(el);
+  });
+  if(!br.children.length)br.innerHTML='<p class="muted text-xs">Sem contas neste mês.</p>';
+
+  // projeção
+  const fc=$('#forecast');fc.innerHTML='';
+  const months=[...Array(6)].map((_,i)=>addM(cur,i+1));
+  const vals=months.map(k=>totalOf(k));const max=Math.max(...vals,1);
+  months.forEach((k,i)=>{
+    const el=document.createElement('div');
+    el.innerHTML=`<div class="flex justify-between text-xs mb-1"><span class="capitalize">${shortOf(k)}</span><span class="money muted">${BRL(vals[i])}</span></div>
+      <div class="bar"><i style="width:${vals[i]/max*100}%"></i></div>`;
+    el.className='cursor-pointer';
+    el.onclick=()=>{const[y,m]=k.split('-').map(Number);cursor=new Date(y,m-1,1);render();};
+    fc.appendChild(el);
+  });
+
+  // lista
+  const q=$('#q').value.trim().toLowerCase(),ft=$('#fType').value,fr=$('#fResp').value,sb=$('#sortBy').value;
+  let shown=(tab==='paid'?paid:pend).filter(b=>
+    (!q||b.desc.toLowerCase().includes(q))&&(!ft||b.type===ft)&&(!fr||b.resp===fr));
+  shown.sort((a,b)=>sb==='amount'?valueOf(b,key)-valueOf(a,key):sb==='desc'?a.desc.localeCompare(b.desc):a.due-b.due);
+
+  const list=$('#list');list.innerHTML='';
+  $('#empty').classList.toggle('hidden',shown.length>0);
+  $('#empty').textContent=(q||ft||fr)?'Nenhuma conta com esses filtros.':tab==='paid'?'Nenhuma conta quitada neste mês ainda.':'Nada pendente aqui. Cadastre uma conta para começar.';
+
+  shown.forEach(b=>{
+    const oc=occurrence(b,key),t=TYPES[b.type],st=tab==='paid'?{k:'ok',t:''}:status(b,key);
+    const col=st.k==='late'?'var(--late)':st.k==='warn'?'var(--warn)':'';
+    const li=document.createElement('li');
+    li.className='row flex items-center gap-3 py-3 px-2 rounded-xl';
+    li.innerHTML=`<button class="tick btn h-6 w-6 shrink-0 rounded-md grid place-items-center text-xs font-bold"
+      style="border:2px solid ${tab==='paid'?'var(--accent)':col||'var(--line)'};background:${tab==='paid'?'var(--accent)':'transparent'};color:#fff"
+      aria-label="${tab==='paid'?'Marcar como pendente':'Marcar como paga'}">${tab==='paid'?'✓':''}</button>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold truncate ${tab==='paid'?'line-through opacity-60':''}">${esc(b.desc)}</p>
+        <div class="flex flex-wrap items-center gap-1.5 mt-1">
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white" style="background:${t.c}">${t.l}</span>
+          <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white" style="background:${RESP[b.resp]||'#64748b'}">${esc(b.resp)}</span>
+          ${st.t?`<span class="text-[10px] font-semibold" style="color:${col}">${st.t}</span>`:`<span class="text-[10px] muted">vence dia ${b.due}</span>`}
+          ${oc.of?`<span class="text-[10px] muted">• parcela ${oc.n} de ${oc.of}</span>`:''}
+        </div></div>
+      <button class="val text-right shrink-0" title="Ajustar o valor deste mês">
+        ${needsValue(b,key)?`<span class="text-xs font-semibold" style="color:var(--warn)">definir valor</span>`
+        :`<span class="money font-display font-semibold whitespace-nowrap">${BRL(valueOf(b,key))}</span>`}
+        ${(b.values||{})[key]!==undefined&&b.amount>0?'<span class="block text-[10px] muted">ajustado</span>':''}
+      </button>
+      <div class="flex gap-1 shrink-0">
+        <button class="edit btn px-2 py-1 rounded-lg text-sm" aria-label="Editar">✏️</button>
+        <button class="del btn px-2 py-1 rounded-lg text-sm" aria-label="Excluir">🗑️</button></div>`;
+    li.querySelector('.tick').onclick=()=>{
+      if(!isPaid(b,key)&&needsValue(b,key)){editValue(li,b,key);return;}
+      li.classList.add('leaving');setTimeout(()=>togglePaid(b.id,key),260);};
+    li.querySelector('.val').onclick=()=>editValue(li,b,key);
+    li.querySelector('.edit').onclick=()=>openSheet(b);
+    li.querySelector('.del').onclick=()=>{
+      const only=b.type==='variavel'||b.type==='parcelada'&&false;
+      if(confirm(`Excluir "${b.desc}"? A conta sai de todos os meses.`)){
+        state.bills=state.bills.filter(x=>x.id!==b.id);save();render();}};
+    list.appendChild(li);
+  });
+
+  $$('.tabbtn').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab));
+  $$('.navbtn').forEach(x=>x.setAttribute('aria-current',x.dataset.tab===tab));
+  applyPrivacy();drawChart(sd,sp);
+}
+
+function editValue(li,b,key){
+  const cell=li.querySelector('.val');
+  cell.innerHTML='<input type="number" step="0.01" min="0" class="w-28 text-right" />';
+  const inp=cell.querySelector('input');
+  inp.value=valueOf(b,key)||'';inp.focus();inp.select();
+  const commit=()=>{
+    const v=parseFloat(inp.value);
+    const bill=state.bills.find(x=>x.id===b.id);
+    bill.values=bill.values||{};
+    if(isNaN(v)||v<0)delete bill.values[key];else bill.values[key]=v;
+    save();render();};
+  inp.onblur=commit;
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();inp.blur();}if(e.key==='Escape')render();};
+}
+
+function togglePaid(id,key){
+  const b=state.bills.find(x=>x.id===id);if(!b)return;
+  b.paid=b.paid||[];
+  b.paid.includes(key)?b.paid=b.paid.filter(k=>k!==key):b.paid.push(key);
+  save();render();
+}
+
+function drawChart(paid,pend){
+  const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const empty=paid+pend===0;
+  if(chart){chart.data.datasets[0].data=empty?[0,1]:[paid,pend];chart.data.datasets[0].backgroundColor=[acc,empty?'#cbd5e1':'#94a3b8'];chart.update();return;}
+  chart=new Chart($('#chart'),{type:'doughnut',
+    data:{labels:['Pago','Pendente'],datasets:[{data:empty?[0,1]:[paid,pend],backgroundColor:[acc,'#94a3b8'],borderWidth:0,cutout:'72%'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>state.privacy?'•••':`${c.label}: ${BRL(c.raw)}`}}}}});
+}
+
+const pick=(sel,v)=>$$(sel+' button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));
+const picked=sel=>($(sel+' button[aria-pressed="true"]')||{dataset:{}}).dataset.v;
+
+function syncForm(){
+  const t=picked('#f-type');
+  $('#instWrap').classList.toggle('hidden',t!=='parcelada');
+  $('#endWrap').classList.toggle('hidden',t==='parcelada'||t==='variavel');
+  $('#amountHint').classList.toggle('hidden',t!=='cartao');
+  $('#amountLabel').textContent=t==='cartao'?'Valor médio (opcional)':'Valor (R$)';
+  $('#f-amount').required=(t!=='cartao');
+  $('#typeHint').textContent=TYPES[t].h;
+}
+function openSheet(bill){
+  editingId=bill?bill.id:null;
+  $('#sheetTitle').textContent=bill?'Editar conta':'Nova conta';
+  $('#f-desc').value=bill?bill.desc:'';
+  $('#f-amount').value=bill&&bill.amount?bill.amount:'';
+  $('#f-due').value=bill?bill.due:10;
+  $('#f-inst').value=bill?.installments||12;
+  $('#f-start').value=bill?bill.start:mk(cursor);
+  $('#f-end').value=bill?.end||'';
+  pick('#f-type',bill?bill.type:'fixa');pick('#f-resp',bill?bill.resp:'Bruno');
+  syncForm();$('#sheet').classList.remove('hidden');setTimeout(()=>$('#f-desc').focus(),60);
+}
+const closeSheet=()=>{$('#sheet').classList.add('hidden');editingId=null;};
+$$('#f-type button').forEach(b=>b.onclick=()=>{pick('#f-type',b.dataset.v);syncForm();});
+$$('#f-resp button').forEach(b=>b.onclick=()=>pick('#f-resp',b.dataset.v));
+
+$('#form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const type=picked('#f-type');
+  const d={desc:$('#f-desc').value.trim(),amount:parseFloat($('#f-amount').value)||0,
+    due:Math.min(31,Math.max(1,parseInt($('#f-due').value)||1)),type,resp:picked('#f-resp'),
+    installments:type==='parcelada'?Math.max(2,parseInt($('#f-inst').value)||2):null,
+    start:type==='parcelada'?($('#f-start').value||mk(cursor)):(editingId?state.bills.find(x=>x.id===editingId).start:mk(cursor)),
+    end:(type==='fixa'||type==='cartao')?($('#f-end').value||null):null};
+  if(editingId)Object.assign(state.bills.find(x=>x.id===editingId),d);
+  else state.bills.push({id:crypto.randomUUID(),paid:[],values:{},...d});
+  save();closeSheet();render();
+});
+
+function applyPrivacy(){
+  $$('.money').forEach(el=>el.classList.toggle('blurred',state.privacy));
+  $('#eyeIcon').textContent=state.privacy?'🙈':'👁️';
+  $('#privacyBtn').setAttribute('aria-pressed',state.privacy);
+}
+function applyTheme(){
+  document.documentElement.classList.toggle('dark',state.theme==='dark');
+  $('#themeBtn').textContent=state.theme==='dark'?'☀️':'🌙';
+  if(chart){chart.destroy();chart=null;}
+}
+
+$('#privacyBtn').onclick=()=>{state.privacy=!state.privacy;save();applyPrivacy();if(chart)chart.update();};
+$('#themeBtn').onclick=()=>{state.theme=state.theme==='dark'?'light':'dark';save();applyTheme();render();};
+$('#prevMonth').onclick=()=>{cursor.setMonth(cursor.getMonth()-1);render();};
+$('#nextMonth').onclick=()=>{cursor.setMonth(cursor.getMonth()+1);render();};
+$('#todayBtn').onclick=()=>{cursor=new Date();cursor.setDate(1);render();};
+$('#newBtn').onclick=()=>openSheet();$('#newBtnMobile').onclick=()=>openSheet();
+$('#closeSheet').onclick=closeSheet;$('#cancelBtn').onclick=closeSheet;
+$('#sheet').onclick=e=>{if(e.target.id==='sheet')closeSheet();};
+['q','fType','fResp','sortBy'].forEach(id=>$('#'+id).oninput=render);
+$$('.tabbtn,.navbtn').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeSheet();$('#backupSheet').classList.add('hidden');}
+  if(e.key.toLowerCase()==='n'&&!/input|select/i.test(e.target.tagName)){e.preventDefault();openSheet();}});
+
+$('#backupBtn').onclick=()=>{
+  $('#lastBackup').textContent=state.lastBackup?'Último backup: '+new Date(state.lastBackup).toLocaleDateString('pt-BR'):'Você ainda não exportou nenhum backup.';
+  $('#backupSheet').classList.remove('hidden');};
+$('#closeBackup').onclick=()=>$('#backupSheet').classList.add('hidden');
+$('#backupSheet').onclick=e=>{if(e.target.id==='backupSheet')e.currentTarget.classList.add('hidden');};
+$('#exportBtn').onclick=()=>{
+  state.lastBackup=Date.now();save();
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`contas-${mk(new Date())}.json`;a.click();URL.revokeObjectURL(a.href);
+  $('#lastBackup').textContent='Backup salvo agora.';};
+$('#importFile').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);
+    if(!Array.isArray(d.bills))throw 0;
+    if(confirm(`Importar ${d.bills.length} contas? Os dados atuais serão substituídos.`)){
+      state={...state,...d};save();$('#backupSheet').classList.add('hidden');applyTheme();render();}
+  }catch(err){alert('Arquivo inválido. Use um JSON exportado por este app.');}};
+  r.readAsText(f);e.target.value='';};
+
+load();applyTheme();render();
+</script>
+</body>
+</html>
