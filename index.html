@@ -18,6 +18,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
 <script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{display:['Sora','sans-serif'],sans:['Inter','sans-serif']}}}};</script>
 <style>
 :root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--txt:#0f172a;--muted:#64748b;--accent:#10b981;--accent2:#059669;--warn:#f59e0b;--late:#ef4444;--shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px -12px rgba(15,23,42,.18)}
@@ -49,6 +52,7 @@ option{color:#0f172a}
 .bar>i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .4s}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
+<script>const APP_VERSION="2026-09-22.1";</script>
 </head>
 <body>
 <div class="mx-auto max-w-6xl px-4 pb-28 md:pb-10 pt-4">
@@ -60,6 +64,7 @@ option{color:#0f172a}
     <p class="text-xs muted">Dívidas e compromissos da casa</p></div>
   </div>
   <div class="flex items-center gap-2">
+    <span id="syncBadge" class="text-sm px-1" title="Sincronização">⚪</span>
     <button id="backupBtn" class="btn card px-3 py-2 text-sm" title="Backup dos dados">💾</button>
     <button id="privacyBtn" class="btn card px-3 py-2 text-sm" aria-pressed="false" title="Ocultar valores"><span id="eyeIcon">👁️</span></button>
     <button id="themeBtn" class="btn card px-3 py-2 text-sm" title="Alternar tema">🌙</button>
@@ -190,6 +195,7 @@ option{color:#0f172a}
     <div class="grid gap-2">
       <button id="exportBtn" class="btn btn-primary py-3 rounded-xl font-semibold">Exportar arquivo JSON</button>
       <label class="btn card py-3 rounded-xl font-semibold text-center cursor-pointer">Importar arquivo JSON<input id="importFile" type="file" accept="application/json" class="hidden"></label>
+      <button id="forceUpdateBtn" class="btn card py-2 rounded-xl text-xs muted">Forçar atualização do app</button>
     </div>
     <p id="lastBackup" class="text-xs muted mt-3 text-center"></p>
   </div>
@@ -211,7 +217,49 @@ let cursor=new Date();cursor.setDate(1);
 let tab='pending',editingId=null,chart=null;
 
 function load(){try{const r=localStorage.getItem(KEY);if(r)state={...state,...JSON.parse(r)};}catch(e){}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+function save(push=true){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+  if(push && fbReady && !applyingRemote){
+    firebase.database().ref('bills').set(state.bills).then(()=>setSyncBadge('ok')).catch(()=>setSyncBadge('erro'));
+  }
+}
+
+/* ---------- sincronização entre aparelhos (Firebase Realtime Database) ---------- */
+// Preencha com os dados do SEU projeto Firebase (Configurações do projeto > Geral > Seus apps).
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyByBW0gHfFuAg6LY8UocdMHcP-TdPNJibM",
+  authDomain: "contacerta-b6d57.firebaseapp.com",
+  databaseURL: "https://contacerta-b6d57-default-rtdb.firebaseio.com",
+  projectId: "contacerta-b6d57"
+};
+let fbReady=false, applyingRemote=false;
+
+function setSyncBadge(kind){
+  const el=$('#syncBadge'); if(!el) return;
+  const map={off:['⚪','Sincronização não configurada'],connecting:['🟡','Conectando...'],ok:['🟢','Sincronizado'],erro:['🔴','Erro ao sincronizar']};
+  el.textContent=map[kind][0]; el.title=map[kind][1];
+}
+
+function initSync(){
+  if(!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes('COLE_AQUI')){ setSyncBadge('off'); return; }
+  setSyncBadge('connecting');
+  firebase.initializeApp(FIREBASE_CONFIG);
+  firebase.auth().signInAnonymously().catch(()=>setSyncBadge('erro'));
+  firebase.auth().onAuthStateChanged(user=>{
+    if(!user) return;
+    fbReady=true;
+    firebase.database().ref('bills').on('value', snap=>{
+      const remote=snap.val();
+      if(remote===null){ firebase.database().ref('bills').set(state.bills); setSyncBadge('ok'); return; }
+      applyingRemote=true;
+      state.bills=remote;
+      save(false);
+      render();
+      applyingRemote=false;
+      setSyncBadge('ok');
+    }, ()=>setSyncBadge('erro'));
+  });
+}
 const mk=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 const diff=(a,b)=>{const[ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);return(by-ay)*12+(bm-am);};
 const addM=(k,n)=>{const[y,m]=k.split('-').map(Number);const d=new Date(y,m-1+n,1);return mk(d);};
@@ -446,6 +494,7 @@ $('#backupBtn').onclick=()=>{
   $('#backupSheet').classList.remove('hidden');};
 $('#closeBackup').onclick=()=>$('#backupSheet').classList.add('hidden');
 $('#backupSheet').onclick=e=>{if(e.target.id==='backupSheet')e.currentTarget.classList.add('hidden');};
+$('#forceUpdateBtn').onclick=forceRefresh;
 $('#exportBtn').onclick=()=>{
   state.lastBackup=Date.now();save();
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
@@ -461,10 +510,34 @@ $('#importFile').onchange=e=>{
   }catch(err){alert('Arquivo inválido. Use um JSON exportado por este app.');}};
   r.readAsText(f);e.target.value='';};
 
-load();applyTheme();render();
+load();applyTheme();render();initSync();
+
+/* ---------- força atualização quando o site publica uma versão nova ---------- */
+async function forceRefresh(){
+  try{
+    if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
+    if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister())); }
+  }catch(e){}
+  location.reload();
+}
+async function checkVersion(){
+  try{
+    const res=await fetch('./version.json?t='+Date.now(),{cache:'no-store'});
+    const data=await res.json();
+    if(data.version && data.version!==APP_VERSION) forceRefresh();
+  }catch(e){}
+}
+checkVersion();
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkVersion(); });
 
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(()=>{});});
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    let refreshed=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(refreshed)return;refreshed=true;location.reload();
+    });
+  });
 }
 </script>
 </body>
